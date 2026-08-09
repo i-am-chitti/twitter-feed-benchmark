@@ -65,28 +65,31 @@ function runLoadTest(path, name) {
 }
 
 async function main() {
-  try {
-    // 1. Seed DB first unless bypassed
-    if (process.env.BYPASS_SEED === 'true') {
-      console.log(`[1/4] Skipping database seeding (BYPASS_SEED=true active)...`);
-    } else {
+  const shouldSeed = process.argv.includes('--seed');
+
+  if (shouldSeed) {
+    try {
       await seedDatabase();
-      // 2. Wait 2 seconds for DB and Redis writes to settle
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      process.exit(0);
+    } catch (error) {
+      console.error("Benchmark seeding failed:", error.message);
+      process.exit(1);
     }
+  }
 
-    console.log(`\n[3/4] Running benchmarks...\n`);
+  try {
+    console.log(`\n[1/3] Running benchmarks against ${targetUrl}...\n`);
 
-    // 3. Run Pull Model Load Test (SQL Query)
+    // 1. Run Pull Model Load Test (SQL Query)
     const pullResult = await runLoadTest('/feed/pull?userId=120', 'Pull Model (SQL Query)');
 
     console.log('\n----------------------------------------\n');
 
-    // 4. Run Push Model Load Test (Redis Cache + Hybrid Merge)
+    // 2. Run Push Model Load Test (Redis Cache + Hybrid Merge)
     const pushResult = await runLoadTest('/feed/push?userId=120', 'Push Model (Redis Cache + Hybrid)');
 
-    // 5. Output comparison results in a beautiful table
-    console.log(`\n[4/4] BENCHMARK COMPLETED!\n`);
+    // 3. Output comparison results in a beautiful table
+    console.log(`\n[3/3] BENCHMARK COMPLETED!\n`);
     console.log(`======================================================================`);
     console.log(`                     PUSH VS PULL MODEL COMPARISON                    `);
     console.log(`======================================================================`);

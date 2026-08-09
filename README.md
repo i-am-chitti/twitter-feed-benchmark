@@ -45,17 +45,19 @@ To run the benchmark locally on your machine, you must have **Docker Desktop** i
     ```
     This spins up the Node.js API container (exposed on port `3000`) and the Redis container in the background.
 
-2.  **Execute the Benchmark:**
+2.  **Seed the Database:**
+    ```bash
+    npm run docker:seed
+    ```
+    This triggers database seeding (`POST /seed`) to populate the SQLite database with **1,000 users**, follow relationships, and **30,000+ tweets**.
+
+3.  **Execute the Benchmark:**
     ```bash
     npm run docker:benchmark
     ```
-    This automatically:
-    *   Triggers database seeding (`POST /seed`) to populate the SQLite database with **1,000 users**, follow relationships, and **30,000+ tweets**.
-    *   Fills the Redis cache.
-    *   Hammers the `/feed/pull` and `/feed/push` endpoints with **100 concurrent clients** for 10 seconds.
-    *   Prints a comparative ASCII table showing latency, throughput (requests/sec), and bandwidth metrics.
+    This hammers the `/feed/pull` and `/feed/push` endpoints with **400 concurrent clients** for 30 seconds and prints a comparative ASCII table.
 
-3.  **Tear Down the Environment:**
+4.  **Tear Down the Environment:**
     ```bash
     npm run docker:down
     ```
@@ -87,9 +89,9 @@ To prevent public users from resetting the database or overloading your Cloud CP
 1.  Go to your Render Web Service dashboard, navigate to the **Environment** tab, and copy your auto-generated `API_KEY`.
 2.  Seed your Cloud database:
     ```bash
-    curl -X POST https://your-app.onrender.com/seed -H "x-api-key: your-render-key"
+    TARGET_URL=https://your-app.onrender.com API_KEY=your-render-key npm run seed
     ```
-3.  Run the benchmark suite from your Mac:
+3.  Run the benchmark suite from your Mac (as many times as you like without re-seeding):
     ```bash
-    TARGET_URL=https://your-app.onrender.com API_KEY=your-render-key node benchmark.js
+    TARGET_URL=https://your-app.onrender.com API_KEY=your-render-key npm run benchmark
     ```

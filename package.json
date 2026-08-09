@@ -5,8 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "seed": "node benchmark.js --seed",
     "benchmark": "node benchmark.js",
     "docker:up": "docker compose up --build -d",
+    "docker:seed": "docker compose exec app node benchmark.js --seed",
     "docker:benchmark": "docker compose exec app node benchmark.js",
     "docker:down": "docker compose down"
   },
