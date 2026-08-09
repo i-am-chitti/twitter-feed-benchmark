@@ -5,8 +5,8 @@ const config = require('./config');
 
 // Configuration
 const targetUrl = process.env.TARGET_URL || 'http://localhost:3000';
-const testDuration = 10; // seconds
-const connections = 100; // concurrent clients
+const testDuration = 30; // seconds
+const connections = 400; // concurrent clients
 
 // Helper: Make a POST request to seed the database
 function seedDatabase() {
