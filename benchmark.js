@@ -1,5 +1,6 @@
 const autocannon = require('autocannon');
 const http = require('http');
+const config = require('./config');
 
 // Configuration
 const targetUrl = process.env.TARGET_URL || 'http://localhost:3000';
@@ -18,7 +19,7 @@ function seedDatabase() {
       path: '/seed',
       method: 'POST',
       headers: {
-        'x-api-key': process.env.API_KEY || 'local-dev-key'
+        'x-api-key': config.apiKey
       }
     }, (res) => {
       let data = '';
@@ -48,7 +49,7 @@ function runLoadTest(path, name) {
       duration: testDuration,
       pipelining: 1,
       headers: {
-        'x-api-key': process.env.API_KEY || 'local-dev-key'
+        'x-api-key': config.apiKey
       }
     }, (err, result) => {
       if (err) return reject(err);

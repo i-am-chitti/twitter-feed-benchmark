@@ -1,5 +1,5 @@
 node_modules/
 .env
 *.log
-db.sqlite
+db.sqlite*
 .DS_Store
