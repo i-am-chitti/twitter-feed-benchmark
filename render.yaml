@@ -18,13 +18,14 @@ services:
           property: connectionString
       - key: API_KEY
         generateValue: true
+  # Redis cache instance
+  - type: redis
+    name: twitter-redis
+    plan: starter # In-memory cache storage for Redis ZSET testing
+    ipAllowList: [] # Keep internal connection only for security
 
-# Infrastructure Database and Cache Services
+# Infrastructure Database Services
 databases:
   - name: twitter-db
     plan: starter # Dedicated storage for SQL query performance testing
     postgresMajorVersion: 15
-
-redis:
-  - name: twitter-redis
-    plan: starter # In-memory cache storage for Redis ZSET testing
