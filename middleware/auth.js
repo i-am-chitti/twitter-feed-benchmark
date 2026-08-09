@@ -1,6 +1,11 @@
 const config = require('../config');
 
 function authMiddleware(req, res, next) {
+  // Skip authentication if no API key is configured (e.g. local dev)
+  if (!config.apiKey) {
+    return next();
+  }
+
   const incomingApiKey = req.headers['x-api-key'] || req.query.apiKey;
 
   if (!incomingApiKey || incomingApiKey !== config.apiKey) {

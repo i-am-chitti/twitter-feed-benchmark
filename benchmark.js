@@ -13,14 +13,13 @@ function seedDatabase() {
     console.log(`[1/4] Triggering database seeding at ${targetUrl}/seed...`);
     const url = new URL(`${targetUrl}/seed`);
     
+    const headers = config.apiKey ? { 'x-api-key': config.apiKey } : {};
     const req = http.request({
       hostname: url.hostname,
       port: url.port,
       path: '/seed',
       method: 'POST',
-      headers: {
-        'x-api-key': config.apiKey
-      }
+      headers: headers
     }, (res) => {
       let data = '';
       res.on('data', (chunk) => data += chunk);
@@ -48,9 +47,7 @@ function runLoadTest(path, name) {
       connections: connections,
       duration: testDuration,
       pipelining: 1,
-      headers: {
-        'x-api-key': config.apiKey
-      }
+      headers: config.apiKey ? { 'x-api-key': config.apiKey } : {}
     }, (err, result) => {
       if (err) return reject(err);
       resolve({
