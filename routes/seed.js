@@ -34,7 +34,7 @@ router.post('/seed', async (req, res) => {
         if (randUser !== i) followsSet.add(randUser);
       }
       for (const followeeId of followsSet) {
-        await db.run("INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?);", [i, followeeId]);
+        await db.run("INSERT INTO follows (follower_id, followee_id) VALUES (?, ?) ON CONFLICT DO NOTHING;", [i, followeeId]);
       }
     }
     await db.run("COMMIT;");
