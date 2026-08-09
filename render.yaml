@@ -1,9 +1,8 @@
 services:
-  # The Express web API running inside Docker container
   - type: web
     name: twitter-feed-api
     runtime: docker
-    plan: starter # Starter plan has high CPU/RAM resources for clean load testing
+    plan: starter
     envVars:
       - key: PORT
         value: 3000
@@ -18,14 +17,12 @@ services:
           property: connectionString
       - key: API_KEY
         generateValue: true
-  # Redis cache instance
   - type: redis
     name: twitter-redis
-    plan: starter # In-memory cache storage for Redis ZSET testing
-    ipAllowList: [] # Keep internal connection only for security
+    plan: starter
+    ipAllowList: []
 
-# Infrastructure Database Services
 databases:
   - name: twitter-db
-    plan: basic # Use the new flexible 'basic' plan (compute comparable to legacy starter)
+    plan: basic
     postgresMajorVersion: 15
