@@ -16,7 +16,10 @@ function seedDatabase() {
       hostname: url.hostname,
       port: url.port,
       path: '/seed',
-      method: 'POST'
+      method: 'POST',
+      headers: {
+        'x-api-key': process.env.API_KEY || 'local-dev-key'
+      }
     }, (res) => {
       let data = '';
       res.on('data', (chunk) => data += chunk);
@@ -43,7 +46,10 @@ function runLoadTest(path, name) {
       url: `${targetUrl}${path}`,
       connections: connections,
       duration: testDuration,
-      pipelining: 1
+      pipelining: 1,
+      headers: {
+        'x-api-key': process.env.API_KEY || 'local-dev-key'
+      }
     }, (err, result) => {
       if (err) return reject(err);
       resolve({

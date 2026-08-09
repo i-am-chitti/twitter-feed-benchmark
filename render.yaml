@@ -16,6 +16,8 @@ services:
           type: redis
           name: twitter-redis
           property: connectionString
+      - key: API_KEY
+        generateValue: true
 
 # Infrastructure Database and Cache Services
 databases:

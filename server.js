@@ -7,6 +7,10 @@ const app = express();
 // Import Routers
 const seedRouter = require('./routes/seed');
 const feedRouter = require('./routes/feed');
+const authMiddleware = require('./middleware/auth');
+
+// Mount Auth Guard Globally
+app.use(authMiddleware);
 
 // Mount Routers
 app.use(seedRouter);
