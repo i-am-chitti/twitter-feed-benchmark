@@ -1,0 +1,28 @@
+services:
+  # The Express web API running inside Docker container
+  - type: web
+    name: twitter-feed-api
+    runtime: docker
+    plan: starter # Starter plan has high CPU/RAM resources for clean load testing
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: twitter-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: twitter-redis
+          property: connectionString
+
+# Infrastructure Database and Cache Services
+databases:
+  - name: twitter-db
+    plan: starter # Dedicated storage for SQL query performance testing
+    postgresMajorVersion: 15
+
+redis:
+  - name: twitter-redis
+    plan: starter # In-memory cache storage for Redis ZSET testing
