@@ -27,5 +27,5 @@ services:
 # Infrastructure Database Services
 databases:
   - name: twitter-db
-    plan: starter # Dedicated storage for SQL query performance testing
+    plan: basic # Use the new flexible 'basic' plan (compute comparable to legacy starter)
     postgresMajorVersion: 15
