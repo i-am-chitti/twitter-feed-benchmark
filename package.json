@@ -1,0 +1,18 @@
+{
+  "name": "twitter-feed-benchmark",
+  "version": "1.0.0",
+  "description": "Benchmark suite for Push vs. Pull News Feed system design",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "benchmark": "node benchmark.js"
+  },
+  "dependencies": {
+    "autocannon": "^7.15.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "pg": "^8.12.0",
+    "sqlite3": "^5.1.7"
+  }
+}
