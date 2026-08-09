@@ -1,5 +1,6 @@
 const autocannon = require('autocannon');
 const http = require('http');
+const https = require('https');
 const config = require('./config');
 
 // Configuration
@@ -14,9 +15,10 @@ function seedDatabase() {
     const url = new URL(`${targetUrl}/seed`);
     
     const headers = config.apiKey ? { 'x-api-key': config.apiKey } : {};
-    const req = http.request({
+    const client = url.protocol === 'https:' ? https : http;
+    const req = client.request({
       hostname: url.hostname,
-      port: url.port,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
       path: '/seed',
       method: 'POST',
       headers: headers
@@ -64,11 +66,14 @@ function runLoadTest(path, name) {
 
 async function main() {
   try {
-    // 1. Seed DB first
-    await seedDatabase();
-
-    // 2. Wait 2 seconds for DB and Redis writes to settle
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // 1. Seed DB first unless bypassed
+    if (process.env.BYPASS_SEED === 'true') {
+      console.log(`[1/4] Skipping database seeding (BYPASS_SEED=true active)...`);
+    } else {
+      await seedDatabase();
+      // 2. Wait 2 seconds for DB and Redis writes to settle
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
 
     console.log(`\n[3/4] Running benchmarks...\n`);
 
