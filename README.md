@@ -1,97 +1,128 @@
-# Twitter News Feed: Push vs. Pull System Design Benchmark
+# Twitter News Feed: Push vs. Pull Benchmark
 
-This repository contains a high-performance benchmarking suite designed to compare the two classic system design approaches for a high-scale News Feed/Timeline delivery system: **The Push Model (Fan-out on Write)** and **The Pull Model (Fan-out on Read)**.
+A small, honest benchmark of the two classic timeline architectures — **push (fan-out on write)**
+and **pull (fan-out on read)** — plus the **hybrid** that serves high-follower accounts on read.
 
-It supports local development using Docker & SQLite, and cloud deployment on Render.com using a managed PostgreSQL database and a managed Redis cache.
-
----
-
-## 1. System Architecture
-
-The benchmark implements a **Hybrid Model (Celebrity Fan-out)** which splits users into two categories based on follower counts:
-*   **Standard Users (Push Model):** When they tweet, their tweet ID is instantly pushed to their followers' pre-computed feed caches (Redis Sorted Sets `ZSET`).
-*   **Celebrity Users (Pull Model):** When they tweet, their tweet is only saved in the main database. When a follower refreshes their feed, the system dynamically queries the DB for followed celebrities' tweets, merges them with the pushed feed, and sorts them chronologically.
+This is a measurement harness, not a feed product. It exists to produce numbers a writeup can
+cite instead of assert. It does not attempt production scale; see *Limits* below.
 
 ---
 
-## 2. Project Structure
+## What it measures
 
-```text
-├── docker-compose.yml     # Orchestrates Node.js and Redis containers
-├── Dockerfile             # Builds the Node.js application container
-├── package.json           # Defines dependencies and run scripts
-├── server.js              # Express API orchestrator & DB schema setup
-├── db.js                  # Database adapter (SQLite locally / PostgreSQL in cloud)
-├── cache.js               # Shared Redis client connection
-├── config.js              # System constants and configuration properties
-├── benchmark.js           # Autocannon load-testing script
-├── render.yaml            # Render Blueprint Infrastructure as Code
-└── routes/
-    ├── seed.js            # Seeding endpoint logic (SQL transaction-optimized)
-    └── feed.js            # Push and Pull timeline endpoints
+| Mode | Question |
+| :--- | :--- |
+| `read` | How do push and pull compare as concurrency rises — and at what point is the number just queueing delay? |
+| `fanout` | What does fan-out on write cost as follower count grows? This is the cost the hybrid design exists to avoid. |
+
+The read benchmark sweeps concurrency, randomises `userId` per request, alternates model order
+across repeats, and reports an **`implied rps`** column (`connections / avg latency`). When that
+column tracks measured rps, the run is saturated and `avg ms` is queueing delay rather than
+service time — a single-point closed-loop test cannot tell you the difference.
+
+`--rate=N` switches to open loop, which is the only way to read latency independent of the load
+generator's own backlog.
+
+---
+
+## Architecture under test
+
+* **Standard accounts → push.** On write, the tweet id is fanned out into every follower's Redis
+  sorted set (`feed:{userId}`, score = `created_at`, member = `tweetId`).
+* **High-follower accounts → pull.** Their tweets are not fanned out. The read path queries them
+  live and merges.
+* **Two-tier cache.** Tier 1 is the sorted set (structure only). Tier 2 is `tweet:{id}` holding
+  one copy of each body globally, so a viral tweet is stored once rather than per follower.
+
+The celebrity cutoff is **derived** from the follow graph (`CELEB_THRESHOLD` followers), not a
+hardcoded id list. The seeded graph draws followees from a Zipf distribution, so follower counts
+follow a power law and the celebrity problem is present in the data rather than assumed.
+
+---
+
+## Run it
+
+```bash
+docker compose up --build -d     # api + redis
+npm run seed                     # seed graph, timeline, caches
+npm test                         # push/pull parity — run this before trusting any number
+npm run benchmark                # read sweep
+npm run fanout                   # write-path curve
+```
+
+Against a deployed stack:
+
+```bash
+export TARGET_URL=https://your-app.onrender.com API_KEY=...
+npm run seed && npm test && npm run benchmark
+```
+
+Useful flags:
+
+```bash
+node benchmark.js read --conns=1,10,50,100,400 --duration=30 --repeat=3
+node benchmark.js read --conns=100 --rate=200          # open loop
+node benchmark.js fanout --probes=1,4,16,64,256 --repeat=5
+```
+
+`npm run fanout` writes real tweets. Re-seed before running the read benchmark again.
+
+Feed cache memory, for extrapolating the RAM bill:
+
+```bash
+redis-cli memory usage feed:150
 ```
 
 ---
 
-## 3. Local Development (Docker)
+## Configuration
 
-To run the benchmark locally on your machine, you must have **Docker Desktop** installed.
+All env-driven, so the dataset can be scaled without editing source.
 
-### Commands:
-
-1.  **Build and Start the Environment:**
-    ```bash
-    npm run docker:up
-    ```
-    This spins up the Node.js API container (exposed on port `3000`) and the Redis container in the background.
-
-2.  **Seed the Database:**
-    ```bash
-    npm run docker:seed
-    ```
-    This triggers database seeding (`POST /seed`) to populate the SQLite database with **1,000 users**, follow relationships, and **30,000+ tweets**.
-
-3.  **Execute the Benchmark:**
-    ```bash
-    npm run docker:benchmark
-    ```
-    This hammers the `/feed/pull` and `/feed/push` endpoints with **400 concurrent clients** for 30 seconds and prints a comparative ASCII table.
-
-4.  **Tear Down the Environment:**
-    ```bash
-    npm run docker:down
-    ```
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `SEED` | `42` | Deterministic dataset — same seed, same graph and timeline |
+| `USER_COUNT` | `1000` | Users who tweet and read |
+| `TWEETS_PER_USER` | `30` | Timeline depth |
+| `FOLLOWS_PER_USER` | `20` | Out-degree |
+| `ZIPF_EXPONENT` | `1.0` | Skew of the follower distribution |
+| `CELEB_THRESHOLD` | `200` | Followers at which an account is served on read |
+| `FEED_DEPTH` | `800` | Sorted-set trim depth |
+| `TRIM_PROBABILITY` | `0.05` | Trim on ~1 in 20 fan-out writes rather than every one |
+| `PG_POOL_MAX` | `10` | **Control for this.** A small pool limits the pull path and is easily mistaken for an architectural result |
+| `TWEET_TTL_SECONDS` | `604800` | Tier-2 body TTL |
 
 ---
 
-## 4. Production Cloud Deployment (Render.com)
+## Correctness gate
 
-This project is configured with a **Render Blueprint** (`render.yaml`). To deploy the entire distributed system (PostgreSQL, Redis, and Express API) to Render:
+`npm test` asserts push and pull return **identical pages**. Comparing two architectures only
+means something if they do equal work, and three bugs found here had silently broken that:
 
-1.  Create a new repository on GitHub and push this code.
-2.  Log in to your Render Dashboard, click **New +**, and select **Blueprint**.
-3.  Connect your GitHub repository and click **Apply/Approve**.
-4.  Render will automatically provision:
-    *   A managed PostgreSQL database.
-    *   A managed Redis cache.
-    *   A Dockerized web service running the Node.js Express API.
+* `created_at` stored as a naive `TIMESTAMP` — PostgreSQL dropped the ISO offset and node-pg
+  rebuilt it as a local `Date`, shifting DB-sourced tweets by the local UTC offset and sorting
+  every celebrity out of the push page. Now BIGINT epoch millis, the same value used as the
+  sorted-set score.
+* Tweet ids from a database sequence, which does not reset on `DELETE FROM tweets` — a re-seed
+  left Redis holding ids `1..N` while the table held `N+1..2N`. Now assigned from `tweet:seq`.
+* The hybrid merge did not dedupe, so a tweet reachable from both halves appeared twice.
+
+Run it before every benchmark, local or deployed.
 
 ---
 
-## 5. Security & Authentication Guard
+## Limits
 
-To prevent public users from resetting the database or overloading your Cloud CPU instances, the endpoints are protected by an **API Key Guard**:
+Worth stating plainly, because they bound what the numbers support:
 
-*   **Local Development:** Bypassed automatically. If no `API_KEY` environment variable is defined, all routes remain public.
-*   **Production (Render):** Render automatically generates a secure, random `API_KEY` environment variable inside your service.
-    
-### How to run Cloud Benchmarks:
-1.  Go to your Render Web Service dashboard, navigate to the **Environment** tab, and copy your auto-generated `API_KEY`.
-2.  Seed your Cloud database:
-    ```bash
-    TARGET_URL=https://your-app.onrender.com API_KEY=your-render-key npm run seed
-    ```
-3.  Run the benchmark suite from your Mac (as many times as you like without re-seeding):
-    ```bash
-    TARGET_URL=https://your-app.onrender.com API_KEY=your-render-key npm run benchmark
-    ```
+* **Scale.** 1,000 users and 30,000 tweets on small instances. Enough to show fan-out cost and
+  saturation behaviour; **not** enough to demonstrate that pull degrades at production data
+  volume. That claim needs millions of rows and is not reachable here.
+* **Reverse-chronological only.** No ranking layer.
+* **No async fan-out.** Writes fan out inline. Production enqueues to a worker pool; that
+  changes the write-latency picture substantially.
+* **No delete, unfollow, or block handling.** Each is a real push-model cost this does not pay.
+* **No rebuild-on-miss.** An evicted `feed:{userId}` returns a short page. Deliberately left
+  out of scope.
+* **Load generator location matters.** Driving a deployed target from a laptop puts internet RTT
+  and TLS into every sample, identical for both models but diluting the difference.

@@ -6,12 +6,14 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/*.test.js",
-    "seed": "node benchmark.js --seed",
-    "benchmark": "node benchmark.js",
+    "seed": "node benchmark.js seed",
+    "benchmark": "node benchmark.js read",
     "docker:up": "docker compose up --build -d",
-    "docker:seed": "docker compose exec app node benchmark.js --seed",
-    "docker:benchmark": "docker compose exec app node benchmark.js",
-    "docker:down": "docker compose down"
+    "docker:seed": "docker compose exec app node benchmark.js seed",
+    "docker:benchmark": "docker compose exec app node benchmark.js read",
+    "docker:down": "docker compose down",
+    "fanout": "node benchmark.js fanout",
+    "docker:fanout": "docker compose exec app node benchmark.js fanout"
   },
   "dependencies": {
     "autocannon": "^7.15.0",
