@@ -6,10 +6,13 @@ const app = express();
 
 const seedRouter = require('./routes/seed');
 const feedRouter = require('./routes/feed');
+const tweetRouter = require('./routes/tweet');
 const authMiddleware = require('./middleware/auth');
 
+app.use(express.json());
 app.use(authMiddleware);
 app.use(seedRouter);
+app.use(tweetRouter);
 app.use('/feed', feedRouter);
 
 schema
