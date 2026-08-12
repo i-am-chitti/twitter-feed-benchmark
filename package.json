@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test": "node --test test/*.test.js",
     "seed": "node benchmark.js --seed",
     "benchmark": "node benchmark.js",
     "docker:up": "docker compose up --build -d",
