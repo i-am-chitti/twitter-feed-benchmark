@@ -5,16 +5,45 @@ const redis = require('../cache');
 const config = require('../config');
 const { getCelebritySet } = require('../lib/celebrities');
 
+/**
+ * Per-stage timings, emitted as a Server-Timing header.
+ *
+ * Without this, explaining a latency number means guessing at it — the earlier writeup blamed
+ * a P99 spike on JSON parsing in one place and GC pauses in another, with no data for either.
+ */
+function clock() {
+  let last = process.hrtime.bigint();
+  const stages = {};
+  return {
+    mark(name) {
+      const now = process.hrtime.bigint();
+      stages[name] = Number(now - last) / 1e6;
+      last = now;
+    },
+    send(res, body) {
+      res.set(
+        'Server-Timing',
+        Object.entries(stages)
+          .map(([k, v]) => `${k};dur=${v.toFixed(2)}`)
+          .join(', ')
+      );
+      res.json(body);
+    },
+  };
+}
+
 // ----------------------------------------------------
 // ROUTE: PULL MODEL FEED (On-the-fly SQL Joins)
 // ----------------------------------------------------
 router.get('/pull', async (req, res) => {
   const userId = parseInt(req.query.userId) || 5;
+  const t = clock();
 
   try {
     // 1. Fetch all followed accounts from Database
     const followees = await db.query("SELECT followee_id FROM follows WHERE follower_id = ?;", [userId]);
     const followeeIds = followees.map(f => f.followee_id);
+    t.mark('sql_follows');
 
     if (followeeIds.length === 0) {
       return res.json([]);
@@ -28,8 +57,9 @@ router.get('/pull', async (req, res) => {
       ORDER BY created_at DESC, id DESC
       LIMIT 20;
     `, followeeIds);
+    t.mark('sql_tweets');
 
-    res.json(feedTweets);
+    t.send(res, feedTweets);
   } catch (error) {
     console.error("Pull Feed Error:", error);
     res.status(500).json({ error: error.message });
@@ -41,10 +71,12 @@ router.get('/pull', async (req, res) => {
 // ----------------------------------------------------
 router.get('/push', async (req, res) => {
   const userId = parseInt(req.query.userId) || 5;
+  const t = clock();
 
   try {
     // 1. Read pre-computed feed from user's ZSET cache (contains non-celeb tweets)
     const cachedTweetIds = await redis.zrevrange(redis.keys.feed(userId), 0, 19);
+    t.mark('redis_zrange');
 
     let cachedTweets = [];
     if (cachedTweetIds.length > 0) {
@@ -53,13 +85,14 @@ router.get('/push', async (req, res) => {
       // Fetch all contents in a single MGET pipeline round-trip
       const rawTweets = await redis.mget(keys);
       cachedTweets = rawTweets
-        .filter(t => t !== null)
-        .map(t => JSON.parse(t));
+        .filter(raw => raw !== null)
+        .map(raw => JSON.parse(raw));
     }
+    t.mark('redis_mget');
 
     // 2. Fetch followed celebrities
     const followees = await db.query("SELECT followee_id FROM follows WHERE follower_id = ?;", [userId]);
-    
+
     // Filter to celebrities, derived from follower counts at seed time
     const celebs = await getCelebritySet();
     const celebFollowees = followees
@@ -77,6 +110,7 @@ router.get('/push', async (req, res) => {
         LIMIT 20;
       `, celebFollowees);
     }
+    t.mark('sql_celebrity');
 
     // 3. Merge & Sort the Push and Pull streams in memory.
     // created_at is epoch millis on both sides, so this is a numeric compare with id as a
@@ -86,8 +120,9 @@ router.get('/push', async (req, res) => {
 
     // Slice to page size
     const finalFeed = mergedFeed.slice(0, 20);
+    t.mark('merge');
 
-    res.json(finalFeed);
+    t.send(res, finalFeed);
   } catch (error) {
     console.error("Push Feed Error:", error);
     res.status(500).json({ error: error.message });

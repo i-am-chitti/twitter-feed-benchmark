@@ -15,6 +15,12 @@ router.post('/tweet', async (req, res) => {
       content: req.body?.content ?? `Tweet from ${userId}`,
       forceFanout: req.body?.forceFanout === true,
     });
+    res.set(
+      'Server-Timing',
+      Object.entries(result.timings)
+        .map(([k, v]) => `${k};dur=${v.toFixed(2)}`)
+        .join(', ')
+    );
     res.status(201).json(result);
   } catch (err) {
     console.error('[tweet]', err);
