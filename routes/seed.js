@@ -49,10 +49,10 @@ router.post('/seed', async (req, res) => {
         const tweetText = `This is tweet #${t} by user #${i}. System design rules!`;
         const createdAt = Date.now() - (tweetCount - t) * 60000; // epoch millis
         
-        // Insert into database
-        await db.run("INSERT INTO tweets (user_id, content, created_at) VALUES (?, ?, ?);", [i, tweetText, createdAt]);
+        // Ids are assigned here, not by the database, so Redis and the table can never drift.
         const dbId = tweetIdCounter++;
-        
+        await db.run("INSERT INTO tweets (id, user_id, content, created_at) VALUES (?, ?, ?, ?);", [dbId, i, tweetText, createdAt]);
+
         const tweetPayload = {
           id: dbId,
           user_id: i,
@@ -61,7 +61,7 @@ router.post('/seed', async (req, res) => {
         };
 
         // Cache the raw Tweet Content globally (Tier 2 Cache)
-        await redis.set(`tweet:${dbId}`, JSON.stringify(tweetPayload));
+        await redis.set(redis.keys.tweet(dbId), JSON.stringify(tweetPayload), 'EX', config.tweetTtlSeconds);
 
         // Push Model logic: Only push to feeds if the author is NOT a celebrity
         if (!isCeleb) {
@@ -71,7 +71,7 @@ router.post('/seed', async (req, res) => {
           // Pipeline the Redis writes
           const pipeline = redis.pipeline();
           for (const f of followers) {
-            const feedKey = `feed:${f.follower_id}`;
+            const feedKey = redis.keys.feed(f.follower_id);
 
             pipeline.zadd(feedKey, createdAt, dbId);
             pipeline.zremrangebyrank(feedKey, 0, -801); // Keep trimmed to 800
@@ -81,6 +81,9 @@ router.post('/seed', async (req, res) => {
       }
     }
     await db.run("COMMIT;");
+
+    // Keep the id counter in lockstep with the table so a re-seed stays idempotent.
+    await redis.set(redis.keys.tweetSeq, tweetIdCounter - 1);
 
     res.json({ success: true, message: `DB Seeded successfully with ${userCount} users, follow graph, and tweets.` });
   } catch (error) {

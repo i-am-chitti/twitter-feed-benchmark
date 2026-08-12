@@ -10,16 +10,18 @@ const db = require('./db');
  *
  * Epoch millis removes the class of bug, and is the exact value used as the ZSET score — so
  * the cache and the database cannot disagree about ordering.
+ *
+ * `id` is application-assigned (see cache.js `tweet:seq`), not a database sequence.
  */
 const TWEETS = {
   postgres: `CREATE TABLE IF NOT EXISTS tweets (
-    id SERIAL PRIMARY KEY,
+    id BIGINT PRIMARY KEY,
     user_id INT NOT NULL,
     content TEXT NOT NULL,
     created_at BIGINT NOT NULL
   )`,
   sqlite: `CREATE TABLE IF NOT EXISTS tweets (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL,
     content TEXT NOT NULL,
     created_at INTEGER NOT NULL
