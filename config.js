@@ -16,7 +16,6 @@ module.exports = {
 
   // Hybrid cutoff: accounts with >= this many followers are served by fan-out on read.
   celebThreshold: num(process.env.CELEB_THRESHOLD, 200),
-  celebrityIds: [1, 2, 3], // superseded once celebrities are derived from the graph
 
   feedDepth: num(process.env.FEED_DEPTH, 800),
   pageSize: num(process.env.PAGE_SIZE, 20),

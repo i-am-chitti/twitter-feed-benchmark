@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const redis = require('../cache');
 const config = require('../config');
+const { getCelebritySet } = require('../lib/celebrities');
 
 // ----------------------------------------------------
 // ROUTE: PULL MODEL FEED (On-the-fly SQL Joins)
@@ -43,12 +44,12 @@ router.get('/push', async (req, res) => {
 
   try {
     // 1. Read pre-computed feed from user's ZSET cache (contains non-celeb tweets)
-    const cachedTweetIds = await redis.zrevrange(`feed:${userId}`, 0, 19);
+    const cachedTweetIds = await redis.zrevrange(redis.keys.feed(userId), 0, 19);
 
     let cachedTweets = [];
     if (cachedTweetIds.length > 0) {
-      const keys = cachedTweetIds.map(id => `tweet:${id}`);
-      
+      const keys = cachedTweetIds.map(id => redis.keys.tweet(id));
+
       // Fetch all contents in a single MGET pipeline round-trip
       const rawTweets = await redis.mget(keys);
       cachedTweets = rawTweets
@@ -59,10 +60,11 @@ router.get('/push', async (req, res) => {
     // 2. Fetch followed celebrities
     const followees = await db.query("SELECT followee_id FROM follows WHERE follower_id = ?;", [userId]);
     
-    // Filter to celebrity IDs (defined in config)
+    // Filter to celebrities, derived from follower counts at seed time
+    const celebs = await getCelebritySet();
     const celebFollowees = followees
-      .map(f => f.followee_id)
-      .filter(id => config.celebrityIds.includes(id));
+      .map(f => Number(f.followee_id))
+      .filter(id => celebs.has(id));
 
     let celebrityTweets = [];
     if (celebFollowees.length > 0) {
