@@ -24,7 +24,7 @@ router.get('/pull', async (req, res) => {
     const feedTweets = await db.query(`
       SELECT * FROM tweets 
       WHERE user_id IN (${placeholders}) 
-      ORDER BY created_at DESC 
+      ORDER BY created_at DESC, id DESC
       LIMIT 20;
     `, followeeIds);
 
@@ -71,15 +71,17 @@ router.get('/push', async (req, res) => {
       celebrityTweets = await db.query(`
         SELECT * FROM tweets
         WHERE user_id IN (${placeholders})
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 20;
       `, celebFollowees);
     }
 
-    // 3. Merge & Sort the Push and Pull streams in memory
+    // 3. Merge & Sort the Push and Pull streams in memory.
+    // created_at is epoch millis on both sides, so this is a numeric compare with id as a
+    // deterministic tiebreaker — no date parsing, no timezone to get wrong.
     const mergedFeed = [...cachedTweets, ...celebrityTweets];
-    mergedFeed.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    
+    mergedFeed.sort((a, b) => b.created_at - a.created_at || b.id - a.id);
+
     // Slice to page size
     const finalFeed = mergedFeed.slice(0, 20);
 

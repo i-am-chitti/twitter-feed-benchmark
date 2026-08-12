@@ -3,17 +3,14 @@ const router = express.Router();
 const db = require('../db');
 const redis = require('../cache');
 const config = require('../config');
+const schema = require('../schema');
 
 router.post('/seed', async (req, res) => {
   try {
     console.log("Starting DB seeding...");
-    
-    // Clear Redis caches
-    await redis.flushall();
-    
-    // Clear Database tables
-    await db.run("DELETE FROM follows;");
-    await db.run("DELETE FROM tweets;");
+
+    await redis.flushdb();
+    await schema.resetSchema();
 
     const userCount = config.userCount;
     const celebrityIds = config.celebrityIds;
@@ -50,7 +47,7 @@ router.post('/seed', async (req, res) => {
 
       for (let t = 0; t < tweetCount; t++) {
         const tweetText = `This is tweet #${t} by user #${i}. System design rules!`;
-        const createdAt = new Date(Date.now() - (tweetCount - t) * 60000).toISOString();
+        const createdAt = Date.now() - (tweetCount - t) * 60000; // epoch millis
         
         // Insert into database
         await db.run("INSERT INTO tweets (user_id, content, created_at) VALUES (?, ?, ?);", [i, tweetText, createdAt]);
@@ -75,9 +72,8 @@ router.post('/seed', async (req, res) => {
           const pipeline = redis.pipeline();
           for (const f of followers) {
             const feedKey = `feed:${f.follower_id}`;
-            const score = new Date(createdAt).getTime();
-            
-            pipeline.zadd(feedKey, score, dbId);
+
+            pipeline.zadd(feedKey, createdAt, dbId);
             pipeline.zremrangebyrank(feedKey, 0, -801); // Keep trimmed to 800
           }
           await pipeline.exec();
