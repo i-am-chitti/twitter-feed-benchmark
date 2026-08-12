@@ -115,8 +115,16 @@ router.get('/push', async (req, res) => {
     // 3. Merge & Sort the Push and Pull streams in memory.
     // created_at is epoch millis on both sides, so this is a numeric compare with id as a
     // deterministic tiebreaker — no date parsing, no timezone to get wrong.
-    const mergedFeed = [...cachedTweets, ...celebrityTweets];
-    mergedFeed.sort((a, b) => b.created_at - a.created_at || b.id - a.id);
+    //
+    // Dedupe by id: the two halves can overlap. An account that crosses the celebrity
+    // threshold still has earlier tweets sitting in follower ZSETs, and the in-process
+    // celebrity cache means the cutoff moves later for some requests than others. Either way
+    // the same tweet arrives from the cache and the pull, and the page shows it twice.
+    const byId = new Map();
+    for (const tweet of [...cachedTweets, ...celebrityTweets]) byId.set(tweet.id, tweet);
+
+    const mergedFeed = [...byId.values()]
+      .sort((a, b) => b.created_at - a.created_at || b.id - a.id);
 
     // Slice to page size
     const finalFeed = mergedFeed.slice(0, 20);
