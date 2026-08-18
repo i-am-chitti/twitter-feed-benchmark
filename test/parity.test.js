@@ -15,8 +15,13 @@ const assert = require('node:assert');
  *
  * Requires a seeded server. TARGET_URL and API_KEY are honoured.
  */
+// Requiring config loads .env, so the test resolves TARGET_URL and API_KEY exactly the way
+// benchmark.js does. Without it the test silently fell back to localhost while the benchmark
+// ran against the deployed stack.
+const config = require('../config');
+
 const target = process.env.TARGET_URL || 'http://localhost:3000';
-const headers = process.env.API_KEY ? { 'x-api-key': process.env.API_KEY } : {};
+const headers = config.apiKey ? { 'x-api-key': config.apiKey } : {};
 const USERS = [5, 20, 77, 150, 251, 400, 613, 900, 999];
 
 const feed = async (model, userId) => {
